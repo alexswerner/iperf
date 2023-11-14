@@ -195,6 +195,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    d = -d;
 	sp->prev_transit = transit;
 	sp->jitter += (d - sp->jitter) / 16.0;
+    sp->latency_accumulated += transit;
     }
     else {
 	if (sp->test->debug)

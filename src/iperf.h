@@ -106,6 +106,7 @@ struct iperf_interval_results
     int64_t   interval_cnt_error;
     int64_t   packet_count;
     double    jitter;
+    double    latency;
     int64_t   outoforder_packets;
     int64_t   cnt_error;
 
@@ -223,6 +224,7 @@ struct iperf_stream
     int64_t   peer_omitted_packet_count;
     int64_t   omitted_packet_count;
     double    jitter;
+    double    latency_accumulated;
     double    prev_transit;
     int64_t   outoforder_packets;
     int64_t   omitted_outoforder_packets;

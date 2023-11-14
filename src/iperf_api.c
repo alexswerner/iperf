@@ -2441,6 +2441,7 @@ send_results(struct iperf_test *test)
 		    cJSON_AddNumberToObject(j_stream, "bytes", bytes_transferred);
 		    cJSON_AddNumberToObject(j_stream, "retransmits", retransmits);
 		    cJSON_AddNumberToObject(j_stream, "jitter", sp->jitter);
+		    cJSON_AddNumberToObject(j_stream, "latency", sp->latency_accumulated/sp->packet_count);
 		    cJSON_AddNumberToObject(j_stream, "errors", sp->cnt_error);
                     cJSON_AddNumberToObject(j_stream, "omitted_errors", sp->omitted_cnt_error);
 		    cJSON_AddNumberToObject(j_stream, "packets", sp->packet_count);
@@ -2490,6 +2491,7 @@ get_results(struct iperf_test *test)
     cJSON *j_bytes;
     cJSON *j_retransmits;
     cJSON *j_jitter;
+    cJSON *j_latency;
     cJSON *j_errors;
     cJSON *j_omitted_errors;
     cJSON *j_packets;
@@ -2498,7 +2500,7 @@ get_results(struct iperf_test *test)
     cJSON *j_start_time, *j_end_time;
     int sid;
     int64_t cerror, pcount, omitted_cerror, omitted_pcount;
-    double jitter;
+    double jitter, latency;
     iperf_size_t bytes_transferred;
     int retransmits;
     struct iperf_stream *sp;
@@ -2549,13 +2551,14 @@ get_results(struct iperf_test *test)
 			j_bytes = cJSON_GetObjectItem(j_stream, "bytes");
 			j_retransmits = cJSON_GetObjectItem(j_stream, "retransmits");
 			j_jitter = cJSON_GetObjectItem(j_stream, "jitter");
+			j_latency = cJSON_GetObjectItem(j_stream, "latency");
 			j_errors = cJSON_GetObjectItem(j_stream, "errors");
                         j_omitted_errors = cJSON_GetObjectItem(j_stream, "omitted_errors");
 			j_packets = cJSON_GetObjectItem(j_stream, "packets");
                         j_omitted_packets = cJSON_GetObjectItem(j_stream, "omitted_packets");
 			j_start_time = cJSON_GetObjectItem(j_stream, "start_time");
 			j_end_time = cJSON_GetObjectItem(j_stream, "end_time");
-			if (j_id == NULL || j_bytes == NULL || j_retransmits == NULL || j_jitter == NULL || j_errors == NULL || j_packets == NULL) {
+			if (j_id == NULL || j_bytes == NULL || j_retransmits == NULL || j_jitter == NULL || j_latency == NULL || j_errors == NULL || j_packets == NULL) {
 			    i_errno = IERECVRESULTS;
 			    r = -1;
                         } else if ( (j_omitted_errors == NULL && j_omitted_packets != NULL) || (j_omitted_errors != NULL && j_omitted_packets == NULL) ) {
@@ -2567,6 +2570,7 @@ get_results(struct iperf_test *test)
 			    bytes_transferred = j_bytes->valueint;
 			    retransmits = j_retransmits->valueint;
 			    jitter = j_jitter->valuedouble;
+			    latency = j_latency->valuedouble;
 			    cerror = j_errors->valueint;
 			    pcount = j_packets->valueint;
                             if (j_omitted_packets != NULL) {
@@ -2581,6 +2585,7 @@ get_results(struct iperf_test *test)
 			    } else {
 				if (sp->sender) {
 				    sp->jitter = jitter;
+				    sp->latency_accumulated = latency * pcount; // TODO: confirm
 				    sp->cnt_error = cerror;
 				    sp->peer_packet_count = pcount;
 				    sp->result->bytes_received = bytes_transferred;
@@ -3275,6 +3280,7 @@ iperf_reset_stats(struct iperf_test *test)
         sp->omitted_cnt_error = sp->cnt_error;
         sp->omitted_outoforder_packets = sp->outoforder_packets;
 	sp->jitter = 0;
+	sp->latency_accumulated = 0;
 	rp = sp->result;
         rp->bytes_sent_omit = rp->bytes_sent;
         rp->bytes_received = 0;
@@ -3370,6 +3376,7 @@ iperf_stats_callback(struct iperf_test *test)
 	    }
 	    temp.packet_count = sp->packet_count;
 	    temp.jitter = sp->jitter;
+	    temp.latency = sp->latency_accumulated/sp->packet_count;
 	    temp.outoforder_packets = sp->outoforder_packets;
 	    temp.cnt_error = sp->cnt_error;
 	}
@@ -3494,7 +3501,7 @@ iperf_print_intermediate(struct iperf_test *test)
         double start_time, end_time;
 
         int64_t total_packets = 0, lost_packets = 0;
-        double avg_jitter = 0.0, lost_percent;
+        double avg_jitter = 0.0, avg_latency = 0.0, lost_percent;
         int stream_must_be_sender = current_mode * current_mode;
 
         char *sum_name;
@@ -3527,6 +3534,7 @@ iperf_print_intermediate(struct iperf_test *test)
                     total_packets += irp->interval_packet_count;
                     lost_packets += irp->interval_cnt_error;
                     avg_jitter += irp->jitter;
+                    avg_latency += irp->latency;
                 }
             }
         }
@@ -3585,6 +3593,7 @@ iperf_print_intermediate(struct iperf_test *test)
                             iperf_printf(test, report_sum_bw_udp_sender_format, mbuf, start_time, end_time, ubuf, nbuf, zbuf, total_packets, test->omitting?report_omitted:"");
                     } else {
                         avg_jitter /= test->num_streams;
+                        avg_latency /= test->num_streams;
                         if (total_packets > 0) {
                             lost_percent = 100.0 * lost_packets / total_packets;
                         }
@@ -3592,7 +3601,7 @@ iperf_print_intermediate(struct iperf_test *test)
                             lost_percent = 0.0;
                         }
                         if (test->json_output)
-                            cJSON_AddItemToObject(json_interval, sum_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  omitted: %b sender: %b", (double) start_time, (double) end_time, (double) irp->interval_duration, (int64_t) bytes, bandwidth * 8, (double) avg_jitter * 1000.0, (int64_t) lost_packets, (int64_t) total_packets, (double) lost_percent, test->omitting, stream_must_be_sender));
+                            cJSON_AddItemToObject(json_interval, sum_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f lost_packets: %d  packets: %d  lost_percent: %f  omitted: %b sender: %b", (double) start_time, (double) end_time, (double) irp->interval_duration, (int64_t) bytes, bandwidth * 8, (double) avg_jitter * 1000.0, (double) avg_latency * 1000.0, (int64_t) lost_packets, (int64_t) total_packets, (double) lost_percent, test->omitting, stream_must_be_sender));
                         else
                             iperf_printf(test, report_sum_bw_udp_format, mbuf, start_time, end_time, ubuf, nbuf, avg_jitter * 1000.0, lost_packets, total_packets, lost_percent, test->omitting?report_omitted:"");
                     }
@@ -3687,7 +3696,7 @@ iperf_print_results(struct iperf_test *test)
         struct iperf_stream *sp = NULL;
         iperf_size_t bytes_sent, total_sent = 0;
         iperf_size_t bytes_received, total_received = 0;
-        double start_time, end_time = 0.0, avg_jitter = 0.0, lost_percent = 0.0;
+        double start_time, end_time = 0.0, avg_jitter = 0.0, avg_latency = 0.0, lost_percent = 0.0;
         double sender_time = 0.0, receiver_time = 0.0;
         struct iperf_time temp_time;
         double bandwidth;
@@ -3787,6 +3796,7 @@ iperf_print_results(struct iperf_test *test)
                     if (sp->omitted_cnt_error > -1)
                          lost_packets -= sp->omitted_cnt_error;
                     avg_jitter += sp->jitter;
+                    avg_latency += sp->latency_accumulated/sp->packet_count;
                 }
 
                 unit_snprintf(ubuf, UNIT_LEN, (double) bytes_sent, 'A');
@@ -3849,7 +3859,7 @@ iperf_print_results(struct iperf_test *test)
                          * instead.
                          */
                         int64_t packet_count = sender_packet_count ? sender_packet_count : receiver_packet_count;
-                        cJSON_AddItemToObject(json_summary_stream, "udp", iperf_json_printf("socket: %d  start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  out_of_order: %d sender: %b", (int64_t) sp->socket, (double) start_time, (double) sender_time, (double) sender_time, (int64_t) bytes_sent, bandwidth * 8, (double) sp->jitter * 1000.0, (int64_t) (sp->cnt_error - sp->omitted_cnt_error), (int64_t) (packet_count - sp->omitted_packet_count), (double) lost_percent, (int64_t) (sp->outoforder_packets - sp->omitted_outoforder_packets), stream_must_be_sender));
+                        cJSON_AddItemToObject(json_summary_stream, "udp", iperf_json_printf("socket: %d  start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  out_of_order: %d sender: %b", (int64_t) sp->socket, (double) start_time, (double) sender_time, (double) sender_time, (int64_t) bytes_sent, bandwidth * 8, (double) sp->jitter * 1000.0, (double) sp->latency_accumulated/sp->packet_count * 1000.0, (int64_t) (sp->cnt_error - sp->omitted_cnt_error), (int64_t) (packet_count - sp->omitted_packet_count), (double) lost_percent, (int64_t) (sp->outoforder_packets - sp->omitted_outoforder_packets), stream_must_be_sender));
                     }
                     else {
                         /*
@@ -4024,6 +4034,7 @@ iperf_print_results(struct iperf_test *test)
             } else {
                 /* Summary sum, UDP. */
                 avg_jitter /= test->num_streams;
+                avg_latency /= test->num_streams;
                 /* If no packets were sent, arbitrarily set loss percentage to 0. */
                 if (total_packets > 0) {
                     lost_percent = 100.0 * lost_packets / total_packets;
@@ -4037,14 +4048,14 @@ iperf_print_results(struct iperf_test *test)
                      * structure is not recommended due to
                      * ambiguities between the sender and receiver.
                      */
-                    cJSON_AddItemToObject(test->json_end, sum_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f sender: %b", (double) start_time, (double) receiver_time, (double) receiver_time, (int64_t) total_sent, bandwidth * 8, (double) avg_jitter * 1000.0, (int64_t) lost_packets, (int64_t) total_packets, (double) lost_percent, stream_must_be_sender));
+                    cJSON_AddItemToObject(test->json_end, sum_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f sender: %b", (double) start_time, (double) receiver_time, (double) receiver_time, (int64_t) total_sent, bandwidth * 8, (double) avg_jitter * 1000.0, (double) avg_latency * 1000.0, (int64_t) lost_packets, (int64_t) total_packets, (double) lost_percent, stream_must_be_sender));
                     /*
                      * Separate sum_sent and sum_received structures.
                      * Using these structures to get the most complete
                      * information about UDP transfer.
                      */
-                    cJSON_AddItemToObject(test->json_end, sum_sent_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  sender: %b", (double) start_time, (double) sender_time, (double) sender_time, (int64_t) total_sent, (double) total_sent * 8 / sender_time, (double) 0.0, (int64_t) 0, (int64_t) sender_total_packets, (double) 0.0, 1));
-                    cJSON_AddItemToObject(test->json_end, sum_received_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  sender: %b", (double) start_time, (double) receiver_time, (double) receiver_time, (int64_t) total_received, (double) total_received * 8 / receiver_time, (double) avg_jitter * 1000.0, (int64_t) lost_packets, (int64_t) receiver_total_packets, (double) lost_percent, 0));
+                    cJSON_AddItemToObject(test->json_end, sum_sent_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  sender: %b", (double) start_time, (double) sender_time, (double) sender_time, (int64_t) total_sent, (double) total_sent * 8 / sender_time, (double) 0.0, (double) 0.0, (int64_t) 0, (int64_t) sender_total_packets, (double) 0.0, 1));
+                    cJSON_AddItemToObject(test->json_end, sum_received_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %  lost_packets: %d  packets: %d  lost_percent: %f  sender: %b", (double) start_time, (double) receiver_time, (double) receiver_time, (int64_t) total_received, (double) total_received * 8 / receiver_time, (double) avg_jitter * 1000.0, (double) avg_latency * 1000.0, (int64_t) lost_packets, (int64_t) receiver_total_packets, (double) lost_percent, 0));
                 } else {
                     /*
                      * On the client we have both sender and receiver overall summary
@@ -4279,7 +4290,7 @@ print_interval_results(struct iperf_test *test, struct iperf_stream *sp, cJSON *
 		lost_percent = 0.0;
 	    }
 	    if (test->json_output)
-		cJSON_AddItemToArray(json_interval_streams, iperf_json_printf("socket: %d  start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  omitted: %b sender: %b", (int64_t) sp->socket, (double) st, (double) et, (double) irp->interval_duration, (int64_t) irp->bytes_transferred, bandwidth * 8, (double) irp->jitter * 1000.0, (int64_t) irp->interval_cnt_error, (int64_t) irp->interval_packet_count, (double) lost_percent, irp->omitted, sp->sender));
+		cJSON_AddItemToArray(json_interval_streams, iperf_json_printf("socket: %d  start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  omitted: %b sender: %b", (int64_t) sp->socket, (double) st, (double) et, (double) irp->interval_duration, (int64_t) irp->bytes_transferred, bandwidth * 8, (double) irp->jitter * 1000.0, (double) irp->latency * 1000.0, (int64_t) irp->interval_cnt_error, (int64_t) irp->interval_packet_count, (double) lost_percent, irp->omitted, sp->sender));
 	    else
 		iperf_printf(test, report_bw_udp_format, sp->socket, mbuf, st, et, ubuf, nbuf, irp->jitter * 1000.0, irp->interval_cnt_error, irp->interval_packet_count, lost_percent, irp->omitted?report_omitted:"");
 	}
