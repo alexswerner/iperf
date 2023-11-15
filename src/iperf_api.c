@@ -3603,7 +3603,7 @@ iperf_print_intermediate(struct iperf_test *test)
                         if (test->json_output)
                             cJSON_AddItemToObject(json_interval, sum_name, iperf_json_printf("start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f lost_packets: %d  packets: %d  lost_percent: %f  omitted: %b sender: %b", (double) start_time, (double) end_time, (double) irp->interval_duration, (int64_t) bytes, bandwidth * 8, (double) avg_jitter * 1000.0, (double) avg_latency * 1000.0, (int64_t) lost_packets, (int64_t) total_packets, (double) lost_percent, test->omitting, stream_must_be_sender));
                         else
-                            iperf_printf(test, report_sum_bw_udp_format, mbuf, start_time, end_time, ubuf, nbuf, avg_jitter * 1000.0, lost_packets, total_packets, lost_percent, test->omitting?report_omitted:"");
+                            iperf_printf(test, report_sum_bw_udp_format, mbuf, start_time, end_time, ubuf, nbuf, avg_jitter * 1000.0, avg_latency * 1000.0, lost_packets, total_packets, lost_percent, test->omitting?report_omitted:"");
                     }
                 }
             }
@@ -3944,9 +3944,9 @@ iperf_print_results(struct iperf_test *test)
                         }
                         else {
                             if (sp->omitted_cnt_error > -1) {
-                                iperf_printf(test, report_bw_udp_format, sp->socket, mbuf, start_time, receiver_time, ubuf, nbuf, sp->jitter * 1000.0, (sp->cnt_error - sp->omitted_cnt_error), (receiver_packet_count - receiver_omitted_packet_count), lost_percent, report_receiver);
+                                iperf_printf(test, report_bw_udp_format, sp->socket, mbuf, start_time, receiver_time, ubuf, nbuf, sp->jitter * 1000.0, sp->latency_accumulated/sp->packet_count * 1000.0, (sp->cnt_error - sp->omitted_cnt_error), (receiver_packet_count - receiver_omitted_packet_count), lost_percent, report_receiver);
                             } else {
-                                iperf_printf(test, report_bw_udp_format_no_omitted_error, sp->socket, mbuf, start_time, receiver_time, ubuf, nbuf, sp->jitter * 1000.0, (receiver_packet_count - receiver_omitted_packet_count), report_receiver);
+                                iperf_printf(test, report_bw_udp_format_no_omitted_error, sp->socket, mbuf, start_time, receiver_time, ubuf, nbuf, sp->jitter * 1000.0, sp->latency_accumulated/sp->packet_count * 1000.0, (receiver_packet_count - receiver_omitted_packet_count), report_receiver);
                             }
                         }
                     }
@@ -4077,7 +4077,7 @@ iperf_print_results(struct iperf_test *test)
                             bandwidth = 0.0;
                         }
                         unit_snprintf(nbuf, UNIT_LEN, bandwidth, test->settings->unit_format);
-                        iperf_printf(test, report_sum_bw_udp_format, mbuf, start_time, receiver_time, ubuf, nbuf, avg_jitter * 1000.0, lost_packets, receiver_total_packets, lost_percent, report_receiver);
+                        iperf_printf(test, report_sum_bw_udp_format, mbuf, start_time, receiver_time, ubuf, nbuf, avg_jitter * 1000.0, avg_latency * 1000.0, lost_packets, receiver_total_packets, lost_percent, report_receiver);
                     }
                 }
             }
@@ -4292,7 +4292,7 @@ print_interval_results(struct iperf_test *test, struct iperf_stream *sp, cJSON *
 	    if (test->json_output)
 		cJSON_AddItemToArray(json_interval_streams, iperf_json_printf("socket: %d  start: %f  end: %f  seconds: %f  bytes: %d  bits_per_second: %f  jitter_ms: %f  latency_ms: %f  lost_packets: %d  packets: %d  lost_percent: %f  omitted: %b sender: %b", (int64_t) sp->socket, (double) st, (double) et, (double) irp->interval_duration, (int64_t) irp->bytes_transferred, bandwidth * 8, (double) irp->jitter * 1000.0, (double) irp->latency * 1000.0, (int64_t) irp->interval_cnt_error, (int64_t) irp->interval_packet_count, (double) lost_percent, irp->omitted, sp->sender));
 	    else
-		iperf_printf(test, report_bw_udp_format, sp->socket, mbuf, st, et, ubuf, nbuf, irp->jitter * 1000.0, irp->interval_cnt_error, irp->interval_packet_count, lost_percent, irp->omitted?report_omitted:"");
+		iperf_printf(test, report_bw_udp_format, sp->socket, mbuf, st, et, ubuf, nbuf, irp->jitter * 1000.0, irp->latency * 1000.0, irp->interval_cnt_error, irp->interval_packet_count, lost_percent, irp->omitted?report_omitted:"");
 	}
     }
 

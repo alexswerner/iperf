@@ -373,7 +373,7 @@ const char report_bw_retrans_cwnd_header_bidir[] =
 "[ ID][Role] Interval           Transfer     Bitrate         Retr  Cwnd\n";
 
 const char report_bw_udp_header[] =
-"[ ID] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams\n";
+"[ ID] Interval           Transfer     Bitrate         Jitter    Latency   Lost/Total Datagrams\n";
 
 const char report_bw_udp_header_bidir[] =
 "[ ID][Role] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams\n";
@@ -394,10 +394,10 @@ const char report_bw_retrans_cwnd_format[] =
 "[%3d]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %3u   %ss       %s\n";
 
 const char report_bw_udp_format[] =
-"[%3d]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %5.3f ms  %" PRIu64 "/%" PRIu64 " (%.2g%%)  %s\n";
+"[%3d]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %5.3f ms  %5.3f ms  %" PRIu64 "/%" PRIu64 " (%.2g%%)  %s\n";
 
 const char report_bw_udp_format_no_omitted_error[] =
-"[%3d]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %5.3f ms  Unknown/%" PRIu64 "  %s\n";
+"[%3d]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %5.3f ms  %5.3f ms  Unknown/%" PRIu64 "  %s\n";
 
 const char report_bw_udp_sender_format[] =
 "[%3d]%s %6.2f-%-6.2f sec  %ss  %ss/sec %s %" PRIu64 "  %s\n";
@@ -412,7 +412,7 @@ const char report_sum_bw_retrans_format[] =
 "[SUM]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %3d             %s\n";
 
 const char report_sum_bw_udp_format[] =
-"[SUM]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %5.3f ms  %" PRIu64 "/%" PRIu64 " (%.2g%%)  %s\n";
+"[SUM]%s %6.2f-%-6.2f sec  %ss  %ss/sec  %5.3f ms  %5.3f ms  %" PRIu64 "/%" PRIu64 " (%.2g%%)  %s\n";
 
 const char report_sum_bw_udp_sender_format[] =
 "[SUM]%s %6.2f-%-6.2f sec  %ss  %ss/sec %s %" PRIu64 "  %s\n";
